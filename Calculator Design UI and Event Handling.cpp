@@ -1,14 +1,11 @@
 #include <wx/wx.h>
 #include <wx/gbsizer.h>
-#include <wx/tokenzr.h>
-#include <cmath>
 #include <stdexcept>
-#include <string>
 
 #include "ButtonIDs.h"
 #include "ButtonFactory.h"
+#include "CalculatorProcessor.h"
 
-static const double kPi = 3.14159265358979323846;
 // Frame
 class CalculatorFrame : public wxFrame
 {
@@ -24,8 +21,6 @@ private:
 
     void OnButtonClicked(wxCommandEvent& event);
     void EvaluateExpression();
-    static double ParseDouble(const wxString& token);
-    static double Evaluate(const wxArrayString& tokens);
 
     wxDECLARE_EVENT_TABLE();
 };
@@ -35,7 +30,7 @@ CalculatorFrame::CalculatorFrame()
         wxDefaultPosition, wxSize(340, 460))
 {
     wxPanel* panel = new wxPanel(this);
-   
+
     wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
     m_display = new wxTextCtrl(panel, ID_TXT_DISPLAY, "",
         wxDefaultPosition, wxSize(-1, 50),
@@ -45,7 +40,7 @@ CalculatorFrame::CalculatorFrame()
     m_display->SetFont(displayFont);
 
     mainSizer->Add(m_display, 0, wxEXPAND | wxALL, 10);
-   
+
 
     wxGridBagSizer* grid = new wxGridBagSizer(6, 6);
 
@@ -184,69 +179,6 @@ void CalculatorFrame::OnButtonClicked(wxCommandEvent& event)
     }
 }
 
-double CalculatorFrame::ParseDouble(const wxString& token)
-{
-    std::string s = token.ToStdString();
-    size_t charsUsed = 0;
-    double value = std::stod(s, &charsUsed);
-
-    if (charsUsed != s.size())
-        throw std::invalid_argument("Malformed number: " + s);
-
-    return value;
-}
-
-double CalculatorFrame::Evaluate(const wxArrayString& tokens)
-{
-    if (tokens.GetCount() == 1)
-    {
-        return ParseDouble(tokens[0]);
-    }
-
-    if (tokens.GetCount() == 2)
-    {
-        wxString func = tokens[0].Lower();
-        if (func != "sin" && func != "cos" && func != "tan")
-            throw std::invalid_argument("Unknown function");
-
-        const double value = ParseDouble(tokens[1]);
-        const double radians = value * kPi / 180.0;
-
-        if (func == "sin") return std::sin(radians);
-        if (func == "cos") return std::cos(radians);
-        return std::tan(radians);
-    }
-
-    if (tokens.GetCount() == 3)
-    {
-        const double left = ParseDouble(tokens[0]);
-        const wxString& op = tokens[1];
-        const double right = ParseDouble(tokens[2]);
-
-        if (op == "+") return left + right;
-        if (op == "-") return left - right;
-        if (op == "*") return left * right;
-
-        if (op == "/")
-        {
-            if (right == 0.0)
-                throw std::domain_error("Division by zero");
-            return left / right;
-        }
-
-        if (op == "%")
-        {
-            if (right == 0.0)
-                throw std::domain_error("Modulo by zero");
-            return std::fmod(left, right);
-        }
-
-        throw std::invalid_argument("Unknown operator: " + op.ToStdString());
-    }
-
-    throw std::invalid_argument("Malformed expression");
-}
-
 void CalculatorFrame::EvaluateExpression()
 {
     wxString expr = m_display->GetValue();
@@ -255,17 +187,12 @@ void CalculatorFrame::EvaluateExpression()
     if (expr.IsEmpty())
         return;
 
-    wxStringTokenizer tokenizer(expr, " ");
-    wxArrayString tokens;
-    while (tokenizer.HasMoreTokens())
-        tokens.Add(tokenizer.GetNextToken());
-
     wxString resultText;
 
     try
     {
-        const double result = Evaluate(tokens);
-        resultText = wxString::Format("%g", result);
+        const double result = CalculatorProcessor::GetInstance()->Calculate(expr);
+        resultText = wxString::Format("%.11g", result);
     }
     catch (const std::invalid_argument&)
     {
