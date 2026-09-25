@@ -47,7 +47,7 @@ CalculatorProcessor::Tokenize(const wxString& expression) const
             continue;
         }
 
-        // Build up a function name (sin/cos/tan).
+        // Letters: build up a function name (sin/cos/tan).
         if (std::isalpha(static_cast<unsigned char>(c)))
         {
             std::string word;
@@ -61,7 +61,7 @@ CalculatorProcessor::Tokenize(const wxString& expression) const
             continue;
         }
 
-        // Digits or a decimal point
+        // Digits or a decimal point: build up a number.
         if (std::isdigit(static_cast<unsigned char>(c)) || c == '.')
         {
             std::string num;
@@ -86,6 +86,10 @@ CalculatorProcessor::Tokenize(const wxString& expression) const
         // One of the five operator characters.
         if (c == '+' || c == '-' || c == '*' || c == '/' || c == '%')
         {
+            // A '-' counts as unary negation (part of the next number)
+            // if it's the very first token, or if it directly follows
+            // another operator or a function name - e.g. "1 - -4" is
+            // 1, -, -4, and "sin -5" is sin applied to -5.
             const bool couldBeUnary =
                 tokens.empty() ||
                 tokens.back().type == TokenType::Operator ||
@@ -154,7 +158,7 @@ void CalculatorProcessor::ApplyFunctions(std::vector<Token>& tokens) const
             t.value = result;
             resolved.push_back(t);
 
-            ++i;
+            ++i; // the operand was consumed along with the function
         }
         else
         {
@@ -167,6 +171,7 @@ void CalculatorProcessor::ApplyFunctions(std::vector<Token>& tokens) const
 
 double CalculatorProcessor::EvaluateTokens(const std::vector<Token>& tokens) const
 {
+    // --- Shunting yard: infix tokens -> postfix (output) queue ---
     std::vector<Token> output;
     std::vector<char> operators;
 
@@ -191,6 +196,8 @@ double CalculatorProcessor::EvaluateTokens(const std::vector<Token>& tokens) con
         }
         else
         {
+            // Should be unreachable - ApplyFunctions() already removed
+            // every Function token before this runs.
             throw std::invalid_argument("Unexpected function token during evaluation");
         }
     }
@@ -204,7 +211,7 @@ double CalculatorProcessor::EvaluateTokens(const std::vector<Token>& tokens) con
         operators.pop_back();
     }
 
-    // --- Evaluate queue
+    // --- Evaluate the postfix queue ---
     std::vector<double> stack;
 
     for (const Token& t : output)
